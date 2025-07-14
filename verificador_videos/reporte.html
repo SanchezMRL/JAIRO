@@ -1,1 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Blockchain de Videos</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #ffffff;
+      margin: 20px;
+      color: #333;
+    }
+
+    h1, h2, h3 {
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+
+    button {
+      background-color: #2c3e50;
+      color: #fff;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #1a252f;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+
+    th {
+      background-color: #ecf0f1;
+      color: #2c3e50;
+    }
+
+    .ok { background-color: #eefaf1; }
+    .alterado { background-color: #fdf1f0; }
+    .faltante { background-color: #fdfae8; }
+
+    #modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(0, 0, 0, 0.4);
+      z-index: 1000;
+    }
+
+    #modal-content {
+      background-color: #fff;
+      width: 400px;
+      margin: 100px auto;
+      padding: 20px;
+      border-radius: 8px;
+      position: relative;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+
+    #modal button.close {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    #respuestaRegistro, #resultadoManual {
+      margin-top: 15px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <h1>Blockchain de Videos</h1>
+
+  <button onclick="registrarVideos()">Registrar nuevos videos</button>
+  <button onclick="verificarIntegridad()">Verificar integridad</button>
+  <button onclick="abrirModal()">Verificador manual</button>
+
+  <div id="respuestaRegistro"></div>
+
+  <h2>Blockchain</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Archivo</th>
+        <th>Hash Video</th>
+        <th>Hash Bloque</th>
+        <th>Hash Anterior</th>
+        <th>Fecha</th>
+      </tr>
+    </thead>
+    <tbody id="tabla"></tbody>
+  </table>
+
+  <h2>Estado de Integridad</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Archivo</th>
+        <th>Estado</th>
+        <th>Hash Registrado</th>
+        <th>Hash Actual</th>
+      </tr>
+    </thead>
+    <tbody id="verificacionTabla"></tbody>
+  </table>
+
+  <!-- MODAL -->
+  <div id="modal">
+    <div id="modal-content">
+      <button class="close" onclick="cerrarModal()">×</button>
+      <h3>Verificación Manual</h3>
+      <input type="file" id="videoManual" accept="video/*">
+      <button onclick="verificarManual()">Verificar</button>
+      <div id="resultadoManual"></div>
+    </div>
+  </div>
+
+  <script>
+    function abrirModal() {
+      document.getElementById("modal").style.display = "block";
+    }
+
+    function cerrarModal() {
+      document.getElementById("modal").style.display = "none";
+      document.getElementById("videoManual").value = "";
+      document.getElementById("resultadoManual").innerText = "";
+    }
+
+    function cargarBlockchain() {
+      fetch('blockchain.json')
+        .then(res => res.json())
+        .then(data => {
+          const tabla = document.getElementById("tabla");
+          tabla.innerHTML = "";
+          data.forEach(b => {
+            tabla.innerHTML += `
+              <tr>
+                <td>${b.indice}</td>
+                <td>${b.nombre_archivo}</td>
+                <td>${b.hash_video.slice(0, 20)}...</td>
+                <td>${b.hash_bloque.slice(0, 20)}...</td>
+                <td>${b.hash_anterior.slice(0, 20)}...</td>
+                <td>${b.timestamp}</td>
+              </tr>`;
+          });
+        });
+    }
+
+    function cargarVerificacion() {
+      fetch('verificacion.json')
+        .then(res => res.json())
+        .then(data => {
+          const tabla = document.getElementById("verificacionTabla");
+          tabla.innerHTML = "";
+          data.forEach(v => {
+            let clase = "";
+            if (v.estado === "OK") clase = "ok";
+            else if (v.estado === "ALTERADO") clase = "alterado";
+            else clase = "faltante";
+
+            tabla.innerHTML += `
+              <tr class="${clase}">
+                <td>${v.archivo}</td>
+                <td><strong>${v.estado}</strong></td>
+                <td>${v.hash_registrado.slice(0, 20)}...</td>
+                <td>${v.hash_actual !== '-' ? v.hash_actual.slice(0, 20) + '...' : '-'}</td>
+              </tr>`;
+          });
+        });
+    }
+
+    function registrarVideos() {
+      const msg = document.getElementById("respuestaRegistro");
+      msg.textContent = "Registrando...";
+      msg.style.color = "#333";
+
+      fetch("/registrar")
+        .then(res => res.json())
+        .then(data => {
+          msg.textContent = data.mensaje;
+          msg.style.color = "green";
+          cargarBlockchain();
+        })
+        .catch(() => {
+          msg.textContent = "Error al registrar.";
+          msg.style.color = "red";
+        });
+    }
+
+    function verificarIntegridad() {
+      const msg = document.getElementById("respuestaRegistro");
+      msg.textContent = "Verificando...";
+      msg.style.color = "#333";
+
+      fetch("/verificar")
+        .then(res => res.json())
+        .then(() => {
+          msg.textContent = "Verificación completada.";
+          msg.style.color = "green";
+          cargarVerificacion();
+        })
+        .catch(() => {
+          msg.textContent = "Error en la verificación.";
+          msg.style.color = "red";
+        });
+    }
+
+    async function calcularHashArchivo(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function verificarManual() {
+      const fileInput = document.getElementById("videoManual");
+      const resultado = document.getElementById("resultadoManual");
+
+      if (!fileInput.files.length) {
+        resultado.textContent = "No se ha seleccionado ningún archivo.";
+        resultado.style.color = "orange";
+        return;
+      }
+
+      const archivo = fileInput.files[0];
+      const nombre = archivo.name;
+      resultado.textContent = "Calculando hash...";
+      resultado.style.color = "#333";
+
+      const hashCalculado = await calcularHashArchivo(archivo);
+
+      fetch('blockchain.json')
+        .then(res => res.json())
+        .then(data => {
+          const exacto = data.find(b => b.nombre_archivo === nombre && b.hash_video === hashCalculado);
+          const mismoHash = data.find(b => b.hash_video === hashCalculado);
+
+          if (exacto) {
+            resultado.textContent = "El video es auténtico. Coinciden nombre y contenido.";
+            resultado.style.color = "green";
+          } else if (mismoHash) {
+            resultado.textContent = "Coincide el contenido, pero el nombre es distinto.";
+            resultado.style.color = "orange";
+          } else {
+            resultado.textContent = "El video no está registrado o fue alterado.";
+            resultado.style.color = "red";
+          }
+        })
+        .catch(() => {
+          resultado.textContent = "Error al verificar.";
+          resultado.style.color = "red";
+        });
+    }
+
+    cargarBlockchain();
+    cargarVerificacion();
+  </script>
+</body>
+</html>
 
